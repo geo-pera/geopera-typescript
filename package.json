@@ -1,6 +1,6 @@
 {
   "name": "@geopera/sdk",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Official TypeScript client for the Geopera geospatial data platform — fully typed access to every operation.",
   "type": "module",
   "license": "MIT",
