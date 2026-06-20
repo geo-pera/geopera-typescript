@@ -1,12 +1,16 @@
 name: Publish TypeScript SDK
 
-# Publishes @geopera/sdk to npm on a tag like `v2.0.0`.
+# Publishes @geopera/sdk to npm on a tag like `v2.0.0`, via npm Trusted Publishing (OIDC).
+# No stored token: the publish is authenticated by this workflow's GitHub OIDC identity,
+# which npm trusts once you configure a Trusted Publisher on the package.
 #
-# One-time setup:
-#   - create the @geopera org/scope on npmjs.com
-#   - create an npm "Automation" access token, add it as the repo secret NPM_TOKEN
-# Bump the version in package.json before tagging (npm rejects re-publishing
-# the same version), then: git tag vX.Y.Z && git push origin vX.Y.Z
+# One-time setup (the package must already exist — bootstrap the first version with a
+# token, then switch to this):
+#   npmjs.com -> @geopera/sdk -> Settings -> Trusted Publisher -> add a GitHub Actions
+#   publisher: repository `geo-pera/geopera-typescript`, workflow `publish.yml`.
+#
+# Release: bump `version` in package.json (npm rejects re-publishing the same version),
+# then: git tag vX.Y.Z && git push origin vX.Y.Z
 
 on:
   push:
@@ -18,7 +22,7 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write       # npm provenance
+      id-token: write # OIDC — npm Trusted Publishing + provenance
       contents: read
     steps:
       - uses: actions/checkout@v4
@@ -29,17 +33,21 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: "24.10.0"
           registry-url: https://registry.npmjs.org
           cache: pnpm
 
+      # npm Trusted Publishing requires npm >= 11.5.1. Node 24 bundles a new-enough npm;
+      # this guarantees it regardless of the bundled version.
+      - run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
-      - run: pnpm gen          # regenerate types from the committed OpenAPI spec
+      - run: pnpm gen # regenerate types from the committed OpenAPI spec
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
 
-      - name: Publish to npm
-        run: pnpm publish --no-git-checks --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # `npm publish` (not `pnpm publish`) performs the OIDC token exchange. No
+      # NODE_AUTH_TOKEN / NPM_TOKEN — the trusted publisher + id-token:write authenticate it.
+      - name: Publish to npm (Trusted Publishing, OIDC)
+        run: npm publish --provenance --access public
