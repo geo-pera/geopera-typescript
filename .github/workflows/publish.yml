@@ -1,0 +1,45 @@
+name: Publish TypeScript SDK
+
+# Publishes @geopera/sdk to npm on a tag like `v2.0.0`.
+#
+# One-time setup:
+#   - create the @geopera org/scope on npmjs.com
+#   - create an npm "Automation" access token, add it as the repo secret NPM_TOKEN
+# Bump the version in package.json before tagging (npm rejects re-publishing
+# the same version), then: git tag vX.Y.Z && git push origin vX.Y.Z
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write       # npm provenance
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm gen          # regenerate types from the committed OpenAPI spec
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+      - name: Publish to npm
+        run: pnpm publish --no-git-checks --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -1,0 +1,50 @@
+{
+  "name": "@geopera/sdk",
+  "version": "2.0.0",
+  "description": "Official TypeScript client for the Geopera geospatial data platform — fully typed access to every operation.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Geopera <support@geopera.com>",
+  "homepage": "https://docs.geopera.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/geo-pera/geopera-typescript.git"
+  },
+  "bugs": "https://github.com/geo-pera/geopera-typescript/issues",
+  "keywords": [
+    "geopera",
+    "satellite",
+    "geospatial",
+    "earth-observation",
+    "stac",
+    "remote-sensing",
+    "api-client"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "gen": "openapi-typescript ./openapi.json -o src/api.d.ts",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": { "access": "public" }
+}
