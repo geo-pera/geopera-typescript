@@ -1,6 +1,29 @@
-import type { OperationId, OperationInput, OperationOutput } from "./types";
+import type { Namespaces, OperationId, OperationInput, OperationOutput } from "./types";
 
 export const DEFAULT_BASE_URL = "https://api.geopera.com";
+
+/**
+ * Build the callable Proxy node for a resource path. Accessing a property
+ * descends one segment (`client.orders` -> `client.orders.archive`); calling a
+ * node invokes the operation at the accumulated path
+ * (`client.orders.archive.place(body)` -> `invoke("orders.archive.place", body)`).
+ * Operation ids are collision-free as a tree, so a node is never both a group
+ * and a callable in practice.
+ */
+function namespaceNode(client: GeoperaClient, prefix: string): unknown {
+  const call = (body?: unknown, options?: { signal?: AbortSignal }) =>
+    client.invoke(prefix as OperationId, body as never, options);
+  return new Proxy(call, {
+    get(target, key) {
+      // Pass through function internals (name, length, call, …), Symbols, and
+      // `then` so the node is not mistaken for a Promise/thenable.
+      if (typeof key === "symbol" || key === "then" || Reflect.has(target, key)) {
+        return Reflect.get(target, key);
+      }
+      return namespaceNode(client, prefix ? `${prefix}.${String(key)}` : String(key));
+    },
+  });
+}
 
 /** Thrown on a non-2xx Geopera API response; preserves the RFC 9457 problem+json body. */
 export class GeoperaError extends Error {
@@ -54,6 +77,18 @@ export class GeoperaClient {
       throw new Error("GeoperaClient: no global `fetch` available — pass `fetch` (Node < 18).");
     }
     this._fetch = f;
+
+    // Expose the `client.<resource>.<action>(body)` namespace surface. Unknown
+    // string properties resolve to a namespace node; known members (invoke,
+    // baseUrl, …), Symbols, and `then` pass through untouched.
+    return new Proxy(this, {
+      get(target, key, receiver) {
+        if (typeof key === "symbol" || key === "then" || key in target) {
+          return Reflect.get(target, key, receiver);
+        }
+        return namespaceNode(target, String(key));
+      },
+    });
   }
 
   /** Invoke an operation by `operation_id`. Body + return type are inferred. */
@@ -81,6 +116,15 @@ export class GeoperaClient {
     return data as OperationOutput<K>;
   }
 }
+
+/**
+ * Instances also expose a fully-typed `client.<resource>.<action>(body)` surface
+ * derived from the operation registry — e.g. `client.catalog.search({ ... })` is
+ * exactly `invoke("catalog.search", { ... })`. `invoke` remains as the low-level
+ * escape hatch for dynamic ids.
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface GeoperaClient extends Namespaces {}
 
 /** Functional one-shot equivalent of {@link GeoperaClient.invoke}. */
 export async function callOperation<K extends OperationId>(

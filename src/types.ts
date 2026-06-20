@@ -28,3 +28,37 @@ export type OperationOutput<K extends OperationId> = operations[K] extends {
         ? O
         : unknown
   : unknown;
+
+/** Per-call options for a namespaced operation method (mirrors `invoke`). */
+export interface InvokeOptions {
+  signal?: AbortSignal;
+}
+
+/**
+ * A namespaced operation method. The body is required unless the operation's
+ * input model is fully optional, in which case it may be omitted.
+ */
+export type OperationMethod<K extends OperationId> =
+  Record<string, never> extends OperationInput<K>
+    ? (body?: OperationInput<K>, options?: InvokeOptions) => Promise<OperationOutput<K>>
+    : (body: OperationInput<K>, options?: InvokeOptions) => Promise<OperationOutput<K>>;
+
+// --- internal helpers for the namespace tree -------------------------------
+type _Head<S extends string> = S extends `${infer H}.${string}` ? H : S;
+type _Rest<S extends string, H extends string> = S extends `${H}.${infer R}` ? R : never;
+
+/**
+ * Builds a nested object type from the (relative) operation ids under `Prefix`.
+ * Each dotted `operation_id` becomes a path of properties ending in a typed
+ * {@link OperationMethod} — e.g. `"orders.archive.place"` becomes
+ * `orders.archive.place(body)`. Derived entirely from {@link OperationId}, so it
+ * tracks the API with zero hand-maintenance.
+ */
+export type NamespaceTree<Rel extends string, Prefix extends string> = {
+  [H in _Head<Rel>]: `${Prefix}${H}` extends OperationId
+    ? OperationMethod<`${Prefix}${H}` & OperationId>
+    : NamespaceTree<_Rest<Extract<Rel, `${H}.${string}`>, H>, `${Prefix}${H}.`>;
+};
+
+/** The full `client.<resource>.<action>(body)` surface, derived from `OperationId`. */
+export type Namespaces = NamespaceTree<OperationId & string, "">;
